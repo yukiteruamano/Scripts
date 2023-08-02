@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+
+# Instalar una nueva VM
+# Aca usamos KVM para acelerar el proceso de virtualizacion
+# $1 Nombre del a maquina virtual
+# $2 Nombre de la imagen que usaremos para la maquina virtual
+# $3 Imagen ISO del SO a Instalar
+echo "Iniciando el proceso de instalación..."
+qemu-system-x86_64 -enable-kvm \
+    -cpu host -smp cores=2,threads=4 \
+    -name $1 \
+    -drive file=$2,if=virtio \
+    -net nic,model=virtio -net user \
+    -m 2048M \
+    -soundhw ac97 -vga vmware \
+    -rtc base=localtime,clock=host \
+    -display gtk \
+    -cdrom $3 -boot menu=on \
+    -usbdevice tablet
+

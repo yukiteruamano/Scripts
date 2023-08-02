@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+
+echo "Creando nueva imagen..."
+qemu-img create -f raw $1.img $2
+echo "La imagen $1 ha sido creada. Tamaño: $2"
+exit 0
+
