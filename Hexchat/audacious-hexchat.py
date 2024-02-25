@@ -11,7 +11,6 @@ import subprocess
 
 
 def mp3_info(word, word_eol, userdata):
-
     artist = subprocess.getoutput("audtool --current-song-tuple-data artist")
     titulo = subprocess.getoutput("audtool --current-song-tuple-data title")
     album = subprocess.getoutput("audtool --current-song-tuple-data album")
@@ -20,10 +19,25 @@ def mp3_info(word, word_eol, userdata):
     calidad = subprocess.getoutput("audtool --current-song-tuple-data quality")
     duracion = subprocess.getoutput("audtool --current-song-length")
 
-    hexchat.command("me || Audacious: (" + artist + " - " + titulo + " - " +
-                    album + " - " + duracion + ") - (" + bitrate + " kbps - " +
-                    genero + " - " + calidad + ") ||")
+    hexchat.command(
+        "me || Audacious: ("
+        + artist
+        + " - "
+        + titulo
+        + " - "
+        + album
+        + " - "
+        + duracion
+        + ") - ("
+        + bitrate
+        + " kbps - "
+        + genero
+        + " - "
+        + calidad
+        + ") ||"
+    )
     return hexchat.EAT_ALL
+
 
 hexchat.hook_command("aump3", mp3_info, help="HexChat Spam Audacious")
 

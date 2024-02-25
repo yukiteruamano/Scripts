@@ -9,7 +9,6 @@ import xchat
 import commands
 
 def mp3_info(word, word_eol, userdata):
-
     artist = commands.getoutput("audtool --current-song-tuple-data artist")
     titulo = commands.getoutput("audtool --current-song-tuple-data title")
     album = commands.getoutput("audtool --current-song-tuple-data album")

@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+
+if [ -z $1 ] || [ -z $2 ]; then
+	echo "Usage:"
+	echo "folder-compress compress-name folder-src"
+	exit 0
+else
+	echo "Compress folder..." "$2" "in " "$1"
+	tar -zcvf "${1}.tar.gz" "$2"
+fi
