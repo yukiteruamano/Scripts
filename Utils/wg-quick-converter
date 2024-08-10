@@ -1,0 +1,85 @@
+#!/bin/sh
+
+
+if [ -z "$1" ]
+then
+    echo "usage: $0 file"
+    exit 1
+fi
+
+if [ ! -f "$1" ]
+then
+    echo "file $1 not found"
+    exit 1
+fi
+
+awk '
+    /^\[Interface\]/ {
+        interface_mode=1
+        peer_mode=0
+    }
+
+    /^\[Peer\]/ {
+        if(interface_mode==1) {
+            print ""
+            interface_mode=0
+        }
+        peer_mode=1
+        if(new_peer == 1) {
+            print ""
+        }
+    }
+
+    # interface mode
+    /^PrivateKey/ && interface_mode==1 {
+        printf("wgkey %s\n",$3)
+    }
+
+    /^PersistentKeepalive/ && interface_mode==1 {
+        printf("wgpka %s\n",$3)
+    }
+
+    /^Address/ && interface_mode==1 {
+        split($3, ips, ",")
+        for(ip in ips) {
+            # check if ipv6
+            if(index(ips[ip],":")==0) {
+                printf("inet %s\n",ips[ip])
+                split(ips[ip], network, "/")
+                routes=sprintf("%s\n!route change default %s", routes, network[1])
+            } else {
+                printf("inet6 %s\n",ips[ip])
+                split(ips[ip], network, "/")
+                routes=sprintf("%s\n!route add -inet6 default %s", routes, network[1])
+            }
+        }
+    }
+
+    # peers
+    /^PublicKey/ && peer_mode==1 {
+        printf("wgpeer %s ",$3)
+    }
+
+    /^PresharedKey/ && peer_mode==1 {
+        printf("wgpsk %s ",$3)
+    }
+
+    /^Endpoint/ && peer_mode==1 {
+        sub(":"," ", $3)
+        printf("wgendpoint %s ",$3)
+        split($3, network, " ")
+        routes=sprintf("!route add %s %s\n%s", network[1], "`route get default | awk '\''/gateway/ { print $2 }'\''`", routes)
+    }
+
+    /^AllowedIPs/ && peer_mode==1 {
+        split($3, ips, ",")
+        for(ip in ips) {
+            printf("wgaip %s ",ips[ip])
+        }
+    }
+
+    END {
+        print ""
+        print routes
+    }
+' "$1"

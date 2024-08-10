@@ -1,0 +1,5 @@
+#!/bin/sh
+
+# Run chrome with WebAssembly enabled .....
+
+env ENABLE_WASM=1 chrome --enable-wasm &

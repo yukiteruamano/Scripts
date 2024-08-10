@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+
+sleep 2
+
+xrandr --output HDMI-A-0 --mode 1920x1080 --rate 60.00 --primary
+
+# Revisamos si el monitor secundario esta conectado
+SMON=$(xrandr | grep HDMI-A-1 | cut -f 2 -d 1)
+
+# Activamos el segundo monitor
+if [ "$SMON" != "" ]; then
+	echo "Secondary monitor detected..."
+	xrandr --output HDMI-A-1 --mode 1920x1080 --rate 60.00 --left-of HDMI-A-0
+fi
+
+# Restoring wallpaper
+nitrogen --restore --head=1
+nitrogen --restore --head=2
