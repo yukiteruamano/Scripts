@@ -5,7 +5,6 @@
 # Dependencies: 7zip and zip packages
 #
 
-
 for FILE in *{.cbr,.CBR}
 do
 	[ -e "$FILE" ] || continue

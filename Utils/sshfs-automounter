@@ -1,0 +1,60 @@
+#!/usr/bin/env bash
+
+# Activamos o desactivamos VPNs adicionales en el sistema
+function sshfs_control() {
+
+    # Detectamos el punto de montaje
+    fusefs="$(mount | grep -Z NFS | cut -d " " -f 1)"
+
+    # No montado, orden montar, monta volumen
+    if [ "$fusefs" != "fusefs" ] && [ "$1" == "mount" ]; then
+        echo "Iniciando montaje..."
+        mount_sshfs
+    fi
+
+    # Montado, orden desmontar, desmonta volumen
+    if [ "$fusefs" == "fusefs" ] && [ "$1" == "umount" ]; then
+        echo "Iniciando desmontaje.."
+        umount_sshfs
+    fi
+
+    echo "No se hace nada..."
+    exit 0
+}
+
+# Montamos SSHFS
+function mount_sshfs() {
+    sshfs -o idmap=user,allow_other,uid=1000,gid=1000 \
+        yukiteru@192.168.10.8:/zpool-data/NFS /home/yukiteru/NFS
+    sleep 2
+    echo "SSHFS Mounted!"
+    exit 0
+}
+
+# Desmontamos SSHFS
+function umount_sshfs() {
+    sync # Sincronizamos escrituras antes de desmontar
+    umount -f /home/yukiteru/NFS
+    sleep 2
+    echo "SSHFS Umounted!"
+    exit 0
+}
+
+# Comprobando permisos
+# Primeros verificamos que el usuario tenga permisos de root
+function is_root_user() {
+    if [ "$USER" != "root" ]; then
+        echo "Permiso denegado."
+        echo "Este programa solo puede ser ejecutado por el usuario root"
+        echo "Use sudo/doas para poder gara ntizar permisos administrativos"
+        exit
+    else
+        if [ "$1" == "mount" ]  || [ "$1" == "umount" ]; then
+            sshfs_control "$1"
+        else
+            echo "Indique una opción: mount o umount."
+        fi
+    fi
+}
+
+is_root_user "$1"

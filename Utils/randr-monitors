@@ -4,10 +4,10 @@ sleep 2
 
 xrandr --output HDMI-A-0 --mode 1920x1080 --rate 60.00 --primary
 
-# Revisamos si el monitor secundario esta conectado
+# Check second monitor
 SMON=$(xrandr | grep HDMI-A-1 | cut -f 2 -d 1)
 
-# Activamos el segundo monitor
+# Enable second monitor
 if [ "$SMON" != "" ]; then
 	echo "Secondary monitor detected..."
 	xrandr --output HDMI-A-1 --mode 1920x1080 --rate 60.00 --left-of HDMI-A-0

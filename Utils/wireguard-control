@@ -22,10 +22,13 @@ function vpn_control() {
 
 	sleep 2
 
-	# Activamos el VPN 01
+	# Activamos el VPN Work
 	echo "Activando OpenVPN Work..."
 	/usr/local/sbin/openvpn --daemon --config /etc/openvpn/work.ovpn &
         sleep 5
+
+	# Reiniciamos DNS
+	check_unwind_dns
 
 	echo "VPN Work activado."
 
@@ -45,9 +48,12 @@ function vpn_control() {
 
 	# Reiniciando conexión Wireguard
 	echo "Iniciando Wireguard..."
-	route change default 10.0.0.1
+	route change default 10.7.0.2
 
 	sleep 2
+
+	# Reiniciamos DNS
+	check_unwind_dns
 
 	echo "Wireguard activado."
 
@@ -71,6 +77,12 @@ function vpn_control() {
 
 	sleep 2
 
+	# Detenemos unwind
+	echo "Deteniendo DNS forwarder...DNS LAN"
+	rcctl stop unwind
+
+	sleep 2
+
 	echo "VPN Desactivado. Conexión directa."
 
         exit 0
@@ -86,6 +98,19 @@ function kill_vpn() {
 	echo "Matando proceso OpenVPN existente..."
 	pkill openvpn
 	sleep 5
+}
+
+function check_unwind_dns() {
+	# Reiniciamos DNS
+	check_unwind==$(rcctl check unwind | grep -n "failed")
+
+	if [ "$check_unwind" == "1:unwind(failed)" ]; then
+		echo "Unwind detenido. Reiniciando servicio..."
+		rcctl start unwind
+	else
+		echo "Recargando servicio Unwind..."
+		rcctl restart unwind
+	fi
 }
 
 # Comprobando permisos
