@@ -1,0 +1,118 @@
+#!/usr/bin/env bash
+
+# Cambiar las opciones para adjustarlas a tus necesidades
+
+# Activamos o desactivamos VPNs adicionales en el sistema
+function vpn_control() {
+
+    if [ "$1" == "work" ]; then
+
+	echo "Activando OpenVPN Work..."
+
+	# Desactivamos Wireguard
+	kill_wireguard
+
+	# Firewall VPN
+	echo "Firewall para OpenVPN..."
+	pfctl -F all
+	pfctl -f /etc/pf.conf-openvpn
+
+	# Activamos el VPN Work
+	echo "Iniciando OpenVPN..."
+	/usr/local/sbin/openvpn --daemon --config /usr/local/etc/openvpn/work.ovpn &
+	sleep 5
+
+	echo "OpenVPN Work activado."
+
+        exit 0
+
+    elif [ "$1" == "personal" ]; then
+
+	echo "Activando Wireguard..."
+
+	# Matando OpenVPN existente
+	kill_vpn
+
+	# Firewall VPN
+	echo "Firewall para Wireguard..."
+	pfctl -F all
+	pfctl -f /etc/pf.conf
+
+	# Reiniciando conexión Wireguard
+	echo "Iniciando Wireguard..."
+	service wireguard start
+	sleep 5
+
+	echo "Wireguard activado."
+
+        exit 0
+
+    elif [ "$1" == "novpn" ]; then
+
+	echo "Desactivando VPN..."
+
+	# Detenemos OpenVPN y Wireguard
+        kill_vpn
+	kill_wireguard 
+	
+	# Firewall simple
+	echo "Cargando firewall para NoVPN..."
+	pfctl -F all
+	pfctl -f /etc/pf.conf-clean
+
+	sleep 5
+
+	echo "VPN Desactivado. Conexión directa."
+
+        exit 0
+
+    else
+        echo "Indique alguna opción. Opciones válidas: enable o disable"
+        exit 0
+    fi
+}
+
+# Kill OpenVPN
+function kill_vpn() {
+	check_vpn=$(pgrep -fl openvpn | head -n 1 | cut -d " " -f 1 )
+
+	if [ "$check_vpn" != "" ]; then
+		echo "OpenVPN detectado! Deteniendo servicio..."
+		echo "PID: $check_vpn"
+		kill -9 "$check_vpn"
+		ifconfig tun0 destroy
+	else
+		echo "OpenVPN no está siendo ejecutando..."
+	fi
+}
+
+# Kill Wireguard
+function kill_wireguard() {
+	check_wg=$(pgrep -fl wg-quick | head -n 1 | cut -d " " -f 1 )
+
+	if [ "$check_wg" != "" ]; then
+		echo "Wireguard detectado! Deteniendo servicio..."
+		echo "PID: $check_wg"
+		service wireguard stop
+		kill -9 "$check_wg"
+	else
+		echo "Wireguard no está siendo ejecutando..."
+	fi
+}
+
+# Comprobando permisos
+# Primeros verificamos que el usuario tenga permisos de root
+function is_root_user() {
+    if [ "$USER" != "root" ]; then
+        echo "Permiso denegado."
+        echo "Este programa solo puede ser ejecutado por el usuario root."
+        echo "Use sudo/doas para poder garantizar permisos administrativos."
+        exit
+    else
+	# Iniciamos programa
+	vpn_control $1
+    fi
+}
+
+# Llamada a la función de inicialización
+is_root_user $1

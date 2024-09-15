@@ -1,0 +1,3 @@
+#!/usr/bin/env bash
+
+doas /usr/local/bin/sshfs-mount-server mount
