@@ -1,131 +1,39 @@
-#!/usr/local/bin/bash
+#!/bin/ksh
 
-# Cambiar las opciones para adjustarlas a tus necesidades
+# Configuración
+LAN_GW="192.168.10.1"
+VPN_GW="10.70.46.51"
 
-# Activamos o desactivamos VPNs adicionales en el sistema
-function vpn_control() {
+if [ "$(id -u)" -ne 0 ]; then
+    echo "Error: Debes ser root (usa doas)."
+    exit 1
+fi
 
-    if [ "$1" == "work" ]; then
-
-	echo "Activando VPN Work..."
-
-	# Activamos la ruta por defecto de la red
-	echo "Cambiando ruta...192.168.10.1"
-	route change default 192.168.10.1
-
-	sleep 2
-
-	# Firewall VPN
-	echo "Firewall para tun0..."
-	pfctl -F all
-	pfctl -f /etc/pf.conf-tun0
-
-	sleep 2
-
-	# Activamos el VPN Work
-	echo "Activando OpenVPN Work..."
-	/usr/local/sbin/openvpn --daemon --config /etc/openvpn/work.ovpn &
-        sleep 5
-
-	# Reiniciamos DNS
-	check_unwind_dns
-
-	echo "VPN Work activado."
-
-        exit 0
-
-    elif [ "$1" == "personal" ]; then
-
-	echo "Activando Wireguard..."
-
-	# Matando OpenVPN existente
-	kill_vpn
-
-	# Firewall VPN
-	echo "Firewall para Wireguard..."
-	pfctl -F all
-	pfctl -f /etc/pf.conf
-
-	# Reiniciando conexión Wireguard
-	echo "Iniciando Wireguard..."
-	route change default 10.7.0.2
-
-	sleep 2
-
-	# Reiniciamos DNS
-	check_unwind_dns
-
-	echo "Wireguard activado."
-
-        exit 0
-
-    elif [ "$1" == "novpn" ]; then
-
-	echo "Desactivando VPN..."
-
-	# Detenemos OpenVPN
-        kill_vpn
-	
-	# Reiniciamos las rutas por defecto
-	echo "Cambiando ruta a 192.168.10.1..."
-	route change default 192.168.10.1
-
-	# Firewall simple
-	echo "Cargando firewall para NoVPN..."
-	pfctl -F all
-	pfctl -f /etc/pf.conf-clean
-
-	sleep 2
-
-	# Detenemos unwind
-	echo "Deteniendo DNS forwarder...DNS LAN"
-	rcctl stop unwind
-
-	sleep 2
-
-	echo "VPN Desactivado. Conexión directa."
-
-        exit 0
-
-    else
-        echo "Indique alguna opción. Opciones válidas: enable o disable"
-        exit 0
-    fi
-}
-
-# Kill VPN
-function kill_vpn() {
-	echo "Matando proceso OpenVPN existente..."
-	pkill openvpn
-	sleep 5
-}
-
-function check_unwind_dns() {
-	# Reiniciamos DNS
-	check_unwind==$(rcctl check unwind | grep -n "failed")
-
-	if [ "$check_unwind" == "1:unwind(failed)" ]; then
-		echo "Unwind detenido. Reiniciando servicio..."
-		rcctl start unwind
-	else
-		echo "Recargando servicio Unwind..."
-		rcctl restart unwind
-	fi
-}
-
-# Comprobando permisos
-# Primeros verificamos que el usuario tenga permisos de root
-function is_root_user() {
-    if [ "$USER" != "root" ]; then
-        echo "Permiso denegado."
-        echo "Este programa solo puede ser ejecutado por el usuario root"
-        echo "Use sudo/doas para poder garantizar permisos administrativos"
-        exit
-    else
-	# Iniciamos programa
-	vpn_control $1
-    fi
-}
-
-# Llamada a la función de inicialización
-is_root_user $1
+case "$1" in
+    on)
+	route -q delete default
+        route -q add default -iface $VPN_GW
+        echo "VPN Activada: $VPN_GW"
+        ;;
+    off)
+	route -q delete default
+        route -q add default $LAN_GW
+        echo "VPN Desactivada (LAN): $LAN_GW"
+        ;;
+    status)
+        # Extraemos solo la IP del gateway por defecto
+        CURRENT_GW=$(netstat -rnf inet | awk '$1 == "default" {print $2}')
+        
+        if [ "$CURRENT_GW" = "$VPN_GW" ]; then
+            echo "$CURRENT_GW (VPN)"
+        elif [ "$CURRENT_GW" = "$LAN_GW" ]; then
+            echo "$CURRENT_GW (NO VPN)"
+        else
+            echo "$CURRENT_GW (Desconocido/Otro)"
+        fi
+        ;;
+    *)
+        echo "Uso: $0 {on|off|status}"
+        exit 1
+        ;;
+esac
