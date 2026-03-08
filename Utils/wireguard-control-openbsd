@@ -33,7 +33,7 @@ case "$1" in
         fi
         ;;
     *)
-        echo "Uso: $0 {on|off|status}"
+echo "Uso: $0 {on|off|status}"
         exit 1
         ;;
 esac

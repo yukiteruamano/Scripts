@@ -1,91 +1,156 @@
 #!/usr/bin/env bash
 
-# Record screen using ffmpeg and audio using aucat in OpenBSD
+# Cross-platform Screen Recording with FFmpeg
+# Supports: OpenBSD, FreeBSD, Linux (X11)
 
-### set USAGE message
-MESSAGE="USAGE: ffscreengrab <snd_rec_device> <framerate> <libx264|libx265> <crf_value> <preset>
-	Example: ffscreengrab snd/0 30 libx264 23 veryfast Live
-	Output: Video in MKV container using libx264 | crf 22 | veryfast | audio acc | stereo
-	Output: Audio in WAV file (using aucat)"
+OS=$(uname -s)
 
+# Default values
+DEFAULT_FRAMERATE="30"
+DEFAULT_CODEC="libx264"
+DEFAULT_CRF="23"
+DEFAULT_PRESET="veryfast"
+DEFAULT_SCALE="1.0" # 1.0 = 100% (original), 0.5 = 50%, 2.0 = 200%, etc.
 
-# Check and set parameters
-if [ -z "$1" ]; then
-	echo "$MESSAGE"
-	exit 1
+USAGE="USAGE: ffscreengrab [audio_device] [framerate] [codec] [crf] [preset] [scale]
+    Options:
+        -h, --help        Show this help message and exit
+
+    Defaults:
+        audio_device: auto-detected per OS
+        framerate:    $DEFAULT_FRAMERATE
+        codec:        $DEFAULT_CODEC
+        crf:          $DEFAULT_CRF
+        preset:       $DEFAULT_PRESET
+        scale:        $DEFAULT_SCALE (e.g., 0.5 for half size, 1920x1080 for fixed)
+
+    Examples:
+        ffscreengrab              # use defaults
+        ffscreengrab auto 30 libx264 23 medium 0.5  # record at 50% scale"
+
+# 0. Help Flag Check
+if [[ "$1" == "-h" ]] || [[ "$1" == "--help" ]]; then
+    echo "$USAGE"
+    exit 0
 fi
-if [ -z "$2" ]; then
-	echo "$MESSAGE"
-	exit 1
+
+# 1. Environment Detection
+echo "Detecting environment ($OS)..."
+
+case "$OS" in
+OpenBSD)
+    # Using sndio for OpenBSD
+    AUDIO_INPUT="-f sndio -i ${1:-default}"
+    SCREEN_INPUT="-f x11grab"
+    ;;
+FreeBSD)
+    # Using OSS for FreeBSD
+    AUDIO_INPUT="-f oss -i ${1:-/dev/dsp}"
+    SCREEN_INPUT="-f x11grab"
+    ;;
+Linux)
+    # Prefer PulseAudio/PipeWire for Linux
+    if command -v pactl >/dev/null; then
+        AUDIO_INPUT="-f pulse -i ${1:-default}"
+    else
+        AUDIO_INPUT="-f alsa -i ${1:-default}"
+    fi
+    SCREEN_INPUT="-f x11grab"
+    ;;
+*)
+    echo "Error: Unsupported OS '$OS'"
+    exit 1
+    ;;
+esac
+
+# 2. Parameters
+FRAMERATE="${2:-$DEFAULT_FRAMERATE}"
+VIDEO_CODEC="${3:-$DEFAULT_CODEC}"
+CRF_VALUE="${4:-$DEFAULT_CRF}"
+CODEC_PRESET="${5:-$DEFAULT_PRESET}"
+SCALE="${6:-$DEFAULT_SCALE}"
+
+# 3. Output Resolution (X11)
+if command -v xdpyinfo >/dev/null; then
+    RES=$(xdpyinfo | grep dimensions | awk '{print $2}')
+else
+    echo "Warning: xdpyinfo not found. Cannot auto-detect resolution."
+    exit 1
 fi
 
-if [ -z "$3" ]; then
-	echo "$MESSAGE"
-	exit 1
+# 4. Save Location (XDG)
+if command -v xdg-user-dir >/dev/null; then
+    VIDEO_DIR="$(xdg-user-dir VIDEOS)"
+else
+    VIDEO_DIR="$HOME/Videos"
 fi
+mkdir -p "$VIDEO_DIR"
 
-if [ -z "$4" ]; then
-	echo "$MESSAGE"
-	exit 1
-fi
-
-if [ -z "$5" ]; then
-	echo "$MESSAGE"
-	exit 1
-fi
-
-# Initializating screen recording
-echo "Initializating screen recording..."
-echo "******************************************"
-
-SND_REC_DEVICE="$1"
-FRAMERATE="$2"
-VIDEO_CODEC="$3"
-CRF_VALUE="$4"
-CODEC_PRESET="$5"
-
-# Video and audio save Folder
-VIDEO_FOLDER="$( xdg-user-dir VIDEOS )"
-
-# Random name for video
-TODAY="$( date +"%Y-%m-%d" )"
-NUMBER=0
-COUNT=0
-
-while [[ -f $VIDEO_FOLDER/record-video-$TODAY-$COUNT.mkv ]]
-do
-    (( ++NUMBER ))
-    COUNT="$( printf -- '-%02d' "$NUMBER" )"
+# 5. File Naming
+TODAY=$(date +"%Y-%m-%d")
+COUNTER=0
+while [[ -f "$VIDEO_DIR/screengrab-$TODAY-$COUNTER.mkv" ]]; do
+    ((COUNTER++))
 done
+OUT_FILE="$VIDEO_DIR/screengrab-$TODAY-$COUNTER.mkv"
 
-# Output for file
-vname="$VIDEO_FOLDER/record-video-$TODAY-$COUNT.mkv"
-aname="$VIDEO_FOLDER/record-audio-$TODAY-$COUNT.wav"
+# 6. Hardware Acceleration Check (VAAPI)
+VAAPI_OPTS=""
+if [ -e /dev/dri/renderD128 ] && [[ "$VIDEO_CODEC" == *"vaapi"* ]]; then
+    VAAPI_OPTS="-hwaccel vaapi -vaapi_device /dev/dri/renderD128 -hwaccel_output_format vaapi"
+    echo "Hardware acceleration (VAAPI) enabled."
+fi
 
-# Show data for video recording and path for video 
-echo "Init recording using..."
-echo "Mic Device: $SND_REC_DEVICE"
-echo "Framerate: $FRAMERATE"
-echo "Video Codec: $VIDEO_CODEC"
-echo "Output: Audio in WAV file using $SND_REC_DEVICE"
-echo "Output: Video in MKV container using $VIDEO_CODEC | crf $CRF_VALUE | $CODEC_PRESET | audio acc | stereo"
-echo "Video path: $vname"
-echo "Audio path: $aname"
-echo "Record begin in 10 seconds...Cancel or finish record using CTRL+C"
+# 7. Scaling and Filter Logic
+FILTER_OPTS=""
+if [ "$SCALE" != "1.0" ]; then
+    if [[ "$SCALE" =~ ^[0-9]+x[0-9]+$ ]]; then
+        # Fixed resolution (e.g., 1280x720)
+        FILTER_OPTS="-vf scale=$SCALE:flags=bicubic"
+    else
+        # Relative scale (e.g., 0.5)
+        FILTER_OPTS="-vf scale=iw*$SCALE:ih*$SCALE:flags=bicubic"
+    fi
+    echo "Scaling enabled: $SCALE"
+fi
+
+# 8. Multi-threading Logic
+if [[ "$OS" == "Linux" ]]; then
+    THREADS=$(nproc 2>/dev/null || echo "0")
+else
+    THREADS=$(sysctl -n hw.ncpu 2>/dev/null || echo "0")
+fi
+THREAD_OPTS="-threads $THREADS"
+
+# 9. Confirmation
+echo "********************************************"
+echo "Recording Start Details:"
+echo "  OS:           $OS"
+echo "  Resolution:   $RES"
+echo "  Scale:        $SCALE"
+echo "  Threads:      $THREADS"
+echo "  Framerate:    $FRAMERATE fps"
+echo "  Audio:        $AUDIO_INPUT"
+echo "  Codec:        $VIDEO_CODEC"
+echo "  Output:       $OUT_FILE"
 echo ""
+echo "Press CTRL+C to finish recording."
+echo "Starting in 5 seconds..."
+echo "********************************************"
 
-sleep 10
+sleep 5
 
-# Command for ffmpeg and aucat
-
-trap "kill 0 " INT
-
-aucat -f "$SND_REC_DEVICE" -o "$aname" & \
+# 10. Main Execution
+# Using a single ffmpeg instance to keep audio/video in sync
 ffmpeg -y \
-    -thread_queue_size 512 \
-    -f x11grab -r "$FRAMERATE" \
-    -s "$(xdpyinfo | grep dimensions | awk '{print $2;}')" \
-    -i :0.0 -c:v "$VIDEO_CODEC" -crf "$CRF_VALUE" -preset "$CODEC_PRESET" \
-    "$vname"
-
-kill 0
+    $VAAPI_OPTS \
+    -thread_queue_size 2048 \
+    $SCREEN_INPUT -r "$FRAMERATE" -s "$RES" -i :0.0 \
+    -thread_queue_size 2048 \
+    $AUDIO_INPUT \
+    $FILTER_OPTS \
+    $THREAD_OPTS \
+    -vf "format=nv12,hwupload" \
+    -c:v "$VIDEO_CODEC" -crf "$CRF_VALUE" -preset "$CODEC_PRESET" \
+    -c:a aac -b:a 192k \
+    "$OUT_FILE"

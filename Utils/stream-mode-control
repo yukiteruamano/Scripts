@@ -17,7 +17,7 @@ function stream_control() {
         echo "Disabling audio record"
         sysctl kern.audio.record=0
 
-	echo "Disabling webcam record"
+echo "Disabling webcam record"
 	sysctl kern.video.record=0
 
         exit 0

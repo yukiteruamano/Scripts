@@ -42,7 +42,7 @@ do
 
 	# timeout confirmation
 	echo "converting all files in" "$(pwd)"
-	echo "10 seconds to cancel..."
+echo "10 seconds to cancel..."
 	echo "-----------------------"
 	sleep 10s
 

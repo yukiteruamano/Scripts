@@ -1,0 +1,10 @@
+{
+  "api_token": "TU_API_TOKEN_DE_CLOUDFLARE",
+  "account_id": "TU_ACCOUNT_ID",
+  "list_id": "ID_DE_LA_LISTA_IP_EN_CLOUDFLARE",
+  "ipinfo_token": "TU_TOKEN_DE_IPINFO_IO",
+  "exclude_countries": ["ES", "FR", "DE"],
+  "exclude_asns": ["AS1234", "AS5678"],
+  "include_countries": ["CN", "RU"],
+  "include_asns": ["AS9999"]
+}
