@@ -22,13 +22,40 @@ Herramienta CLI multiplataforma para codificación de medios multimedia con FFmp
 # Clonar el repositorio
 cd ffmpeg_master
 
-# Crear entorno virtual
-python -m venv .venv
+# Instalar y crear entorno virtual con uv
+uv sync
+
+# Activar entorno virtual
 source .venv/bin/activate  # Linux/macOS
 # .venv\Scripts\activate   # Windows
 
-# Instalar dependencias
-pip install -e .
+# Ejecutar la herramienta
+python main.py info
+python main.py encode input.mp4 output.mp4
+```
+
+## Desarrollo
+
+Este proyecto usa las siguientes herramientas de desarrollo:
+
+- **UV**: Gestor de paquetes y entornos virtuales (usa `uv sync` para instalar dependencias)
+- **Python 3.14**: Versión mínima requerida
+- **Ruff**: Linter y formateador de código (configurado en `pyproject.toml`)
+- **Ty (typy)**: LSP para soporte de type hints en el editor
+
+```bash
+# Instalar herramientas de desarrollo
+uv tool install ruff
+uv tool install ty
+
+# Ejecutar linter
+ruff check .
+
+# Formatear código
+ruff format .
+
+# Verificar types con ty
+ty check main.py
 ```
 
 ## Comandos
