@@ -1,0 +1,42 @@
+[project]
+name = "ffmpeg-master"
+version = "0.1.0"
+description = "FFmpeg Master CLI - Optimized cross-platform media toolkit"
+readme = "README.md"
+requires-python = ">=3.14"
+dependencies = [
+    "psutil>=7.2.2",
+    "rich>=14.3.3",
+    "typer>=0.24.1",
+]
+
+[tool.ruff]
+target-version = "py314"
+line-length = 88
+exclude = [
+    ".venv",
+    "__pycache__",
+    ".git",
+    "*.pyc",
+    "dist",
+    "build",
+]
+
+[tool.ruff.lint]
+select = [
+    "E",
+    "W",
+    "F",
+    "I",
+    "B",
+    "C4",
+    "UP",
+]
+
+ignore = [
+    "E501",
+    "B008",
+]
+
+[tool.ruff.lint.per-file-ignores]
+"__init__.py" = ["F401"]

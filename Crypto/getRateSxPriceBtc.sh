@@ -1,1 +1,0 @@
-curl rate.sx/btc@7d
