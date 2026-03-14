@@ -41,7 +41,7 @@ Este proyecto usa las siguientes herramientas de desarrollo:
 - **UV**: Gestor de paquetes y entornos virtuales (usa `uv sync` para instalar dependencias)
 - **Python 3.14**: Versión mínima requerida
 - **Ruff**: Linter y formateador de código (configurado en `pyproject.toml`)
-- **Ty (typy)**: LSP para soporte de type hints en el editor
+- **Ty**: LSP para soporte de type hints en el editor
 
 ```bash
 # Instalar herramientas de desarrollo
@@ -160,9 +160,9 @@ python main.py encode input.mp4 output.mp4 --preset fast --crf 20
 
 | GPU Vendor | Linux | Windows | macOS |
 |------------|-------|---------|-------|
-| NVIDIA | vaapi, cuda, nvenc | vaapi, cuda, nvenc, d3d11va | - |
-| Intel | vaapi, qsv | vaapi, qsv | - |
-| AMD | vaapi | vaapi, amf, d3d11va | - |
+| NVIDIA | vaapi, cuda, nvenc | cuda, nvenc, d3d11va | - |
+| Intel | vaapi, qsv | qsv | - |
+| AMD | vaapi | amf, d3d11va | - |
 | Apple Silicon | - | - | videotoolbox |
 
 ## Valores de CRF por codec
@@ -184,9 +184,9 @@ La herramienta maneja correctamente las señales SIGINT y SIGTERM, permitiendo d
 ## Notas
 
 - Para usar VAAPI en Linux, asegúrate de tener drivers Intel o AMD instalados y configurados
-- NVIDIA NVENC requiere drivers proprietários de NVIDIA
-- Vulkan encoding no es soportado en GPUs NVIDIA (usa nvenc en su lugar)
-- Las opciones `--upscale` y `--smooth-fps` requieren el filtro `scale_vaapi` en FFmpeg
+- NVIDIA NVENC requiere drivers propietarios de NVIDIA
+- Vulkan encoding no es soportado en GPUs NVIDIA (usa nvenc en su lugar). El soporte Vulkan es incompleto y no está correctamente probado.
+- Las opciones `--upscale` y `--smooth-fps` requieren el filtro `scale_vaapi` en FFmpeg. Sin soporte Vulkan, cosas como FSR no funcionan, aún en desarrollo. 
 
 ## Licencia
 
