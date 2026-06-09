@@ -1,0 +1,28 @@
+#!/usr/bin/env bash
+
+# Intentar detectar el XDG_RUNTIME_DIR del usuario si no está definido
+if [ -z "$XDG_RUNTIME_DIR" ]; then
+    export XDG_RUNTIME_DIR="/var/run/xdg/$(id -u -n)"
+fi
+
+# Intentar detectar de forma automática el display de Wayland activo
+if [ -z "$WAYLAND_DISPLAY" ]; then
+    # Busca un socket activo de Wayland en el directorio runtime
+    # (Suele ser wayland-0)
+    WAYLAND_SOCKET=$(ls $XDG_RUNTIME_DIR/wayland-* 2>/dev/null | head -n 1)
+    if [ -n "$WAYLAND_SOCKET" ]; then
+        export WAYLAND_DISPLAY=$(basename "$WAYLAND_SOCKET")
+    fi
+fi
+
+# Ahora sí, la comprobación de seguridad original
+if [ -n "$XDG_RUNTIME_DIR" ] && [ -n "$WAYLAND_DISPLAY" ]; then
+    # Es vital pasarle el PATH correcto a cron para que encuentre waypaper y el backend (swww, feh, etc.)
+    export PATH=/usr/local/bin:/usr/local/sbin:/usr/bin:/bin:$HOME/.local/bin:$PATH
+
+    # Ejecutar waypaper
+    waypaper --random
+else
+    echo "$(date): Entorno Wayland no detectado. Saltando." >> /tmp/waypaper_cron.log
+    exit 1
+fi

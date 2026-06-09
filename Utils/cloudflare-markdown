@@ -1,0 +1,48 @@
+#!/usr/bin/env bash
+
+# Verificar si se proporcionó la URL
+if [ -z "$1" ]; then
+    echo "Uso: $0 <URL>"
+    exit 1
+fi
+
+URL="$1"
+DIRECTORIO_DESTINO="$HOME/Descargas"
+
+# Crear el directorio de descargas si no existe
+mkdir -p "$DIRECTORIO_DESTINO"
+
+# Crear un archivo temporal seguro en /tmp
+TMP_FILE=$(mktemp /tmp/curl_md.XXXXXX)
+
+echo "Descargando contenido..."
+
+# Realizar la petición curl con el header solicitado
+if ! curl -s -f "$URL" -H "Accept: text/markdown" -o "$TMP_FILE"; then
+    echo "Error: No se pudo descargar el contenido de la URL proporcionada."
+    rm -f "$TMP_FILE"
+    exit 1
+fi
+
+# Intentar extraer el título del Markdown (busca la primera línea que empiece con '# ')
+TITULO=$(grep -m 1 '^# ' "$TMP_FILE" | sed 's/^# //')
+
+if [ -z "$TITULO" ]; then
+    TITULO="documento_descargado"
+fi
+
+# Limpiar el título para que sea un nombre de archivo seguro
+# Elimina caracteres extraños y cambia espacios por guiones bajos
+NOMBRE_ARCHIVO=$(echo "$TITULO" | tr -dc '[:alnum:][:space:]_-"' | sed 's/[[:space:]]/_/g')
+ARCHIVO_FINAL="$DIRECTORIO_DESTINO/${NOMBRE_ARCHIVO}.md"
+
+# Volcar el contenido al destino final para evitar que FreeBSD proteste
+# por los permisos/propietarios de /tmp a tu HOME
+if cat "$TMP_FILE" > "$ARCHIVO_FINAL"; then
+    rm -f "$TMP_FILE"
+    echo "¡Éxito! Archivo guardado en: $ARCHIVO_FINAL"
+else
+    echo "Error: No se pudo escribir el archivo en $ARCHIVO_FINAL"
+    rm -f "$TMP_FILE"
+    exit 1
+fi

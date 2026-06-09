@@ -1,0 +1,148 @@
+#!/bin/bash
+
+# Asegurar que los decimales usen punto (.) y no coma (,) para bc
+export LC_NUMERIC="C"
+
+# 1. Obtener el directorio de trabajo
+if [ -n "$1" ]; then
+    TARGET_DIR="$1"
+else
+    read -r -p "Introduce la ruta del directorio con las imágenes: " TARGET_DIR
+fi
+
+# Resolver rutas relativas (~ o .)
+TARGET_DIR=$(eval echo "$TARGET_DIR")
+
+# Validar que el directorio exista
+if [ ! -d "$TARGET_DIR" ]; then
+    echo "Error: El directorio '$TARGET_DIR' no existe."
+    exit 1
+fi
+
+# 2. Menú de selección de Modo
+echo "------------------------------------------------"
+echo " Selecciona el modo de operación:"
+echo " 1) Filtros fijos (>=1440px de ancho O aspecto 21:9)"
+echo " 2) Buscar una resolución EXACTA (Ej: 1920x1080)"
+echo " 3) Buscar un ASPECT RATIO personalizado (Ej: 16:9, 4:3)"
+echo " 4) TRANSFORMAR (Redimensionar o cambiar Aspect Ratio)"
+echo "------------------------------------------------"
+read -r -p "Opción [1, 2, 3 o 4]: " MODO
+
+# Configurar el entorno según el modo seleccionado
+if [ "$MODO" = "2" ]; then
+    read -r -p "Introduce la resolución exacta (ANCHOxALTO, ej: 1920x1080): " RES_BUSCADA
+    if [[ ! "$RES_BUSCADA" =~ ^[0-9]+x[0-9]+$ ]]; then echo "Formato inválido."; exit 1; fi
+    TARGET_ANCHO=$(echo "$RES_BUSCADA" | cut -d'x' -f1)
+    TARGET_ALTO=$(echo "$RES_BUSCADA" | cut -d'x' -f2)
+    DIR_DESTINO="$TARGET_DIR/$RES_BUSCADA"
+    mkdir -p "$DIR_DESTINO"
+
+elif [ "$MODO" = "3" ]; then
+    read -r -p "Introduce el aspecto deseado (ANCHO:ALTO, ej: 16:9): " RATIO_BUSCADO
+    if [[ ! "$RATIO_BUSCADO" =~ ^[0-9]+:[0-9]+$ ]]; then echo "Formato inválido."; exit 1; fi
+    RATIO_A=$(echo "$RATIO_BUSCADO" | cut -d':' -f1)
+    RATIO_B=$(echo "$RATIO_BUSCADO" | cut -d':' -f2)
+    TARGET_RATIO=$(echo "scale=4; $RATIO_A / $RATIO_B" | bc)
+    DIR_RATIO_NAME=$(echo "$RATIO_BUSCADO" | tr ':' '_')
+    DIR_DESTINO="$TARGET_DIR/Aspecto_$DIR_RATIO_NAME"
+    mkdir -p "$DIR_DESTINO"
+
+elif [ "$MODO" = "4" ]; then
+    echo "  a) Cambiar a una resolución exacta (Ej: 1280x720)"
+    echo "  b) Cambiar a un Aspect Ratio (Recorte inteligente central, Ej: 1:1, 16:9)"
+    read -r -p "Selecciona tipo de transformación [a o b]: " TIPO_TRANSFORMACION
+    
+    if [ "$TIPO_TRANSFORMACION" = "a" ]; then
+        read -r -p "Introduce la nueva resolución (ANCHOxALTO): " NUEVA_RES
+        if [[ ! "$NUEVA_RES" =~ ^[0-9]+x[0-9]+$ ]]; then echo "Formato inválido."; exit 1; fi
+        DIR_DESTINO="$TARGET_DIR/Transformadas_$NUEVA_RES"
+    elif [ "$TIPO_TRANSFORMACION" = "b" ]; then
+        read -r -p "Introduce el nuevo aspect ratio (ANCHO:ALTO): " NUEVO_RATIO
+        if [[ ! "$NUEVO_RATIO" =~ ^[0-9]+:[0-9]+$ ]]; then echo "Formato inválido."; exit 1; fi
+        DIR_RATIO_NAME=$(echo "$NUEVO_RATIO" | tr ':' '_')
+        DIR_DESTINO="$TARGET_DIR/Transformadas_Ratio_$DIR_RATIO_NAME"
+    else
+        echo "Opción inválida."; exit 1
+    fi
+    mkdir -p "$DIR_DESTINO"
+
+else
+    DIR_ALTA_RES="$TARGET_DIR/Alta_Resolucion"
+    DIR_ULTRAWIDE="$TARGET_DIR/Aspecto_21_9"
+    mkdir -p "$DIR_ALTA_RES" "$DIR_ULTRAWIDE"
+fi
+
+echo "------------------------------------------------"
+echo " Procesando... "
+echo "------------------------------------------------"
+
+# 3. Buscar imágenes de forma recursiva y procesar
+find "$TARGET_DIR" -type f \( -iname "*.jpg" -o -iname "*.jpeg" -o -iname "*.png" -o -iname "*.webp" -o -iname "*.tiff" \) | while read -r imagen; do
+
+    # Evitar procesar imágenes que ya estén dentro de nuestras carpetas de destino
+    if [ "$MODO" = "1" ]; then
+        [[ "$imagen" == "$DIR_ALTA_RES"* ]] || [[ "$imagen" == "$DIR_ULTRAWIDE"* ]] && continue
+    else
+        [[ "$imagen" == "$DIR_DESTINO"* ]] && continue
+    fi
+
+    # Obtener dimensiones reales con ImageMagick
+    dimensiones=$(identify -ping -format "%w %h" "$imagen" 2>/dev/null)
+    [ -z "$dimensiones" ] && continue
+
+    read -r ancho alto <<< "$dimensiones"
+    if [ "$alto" -le 0 ]; then continue; fi # Evitar división por cero
+    
+    nombre_archivo=$(basename "$imagen")
+
+    # --- MODO 4: Transformación de Imágenes ---
+    if [ "$MODO" = "4" ]; then
+        if [ "$TIPO_TRANSFORMACION" = "a" ]; then
+            echo "[REDIMENSIONANDO] '$nombre_archivo' -> $NUEVA_RES"
+            # Redimensiona estirando/encajando de forma limpia usando ImageMagick
+            convert "$imagen" -resize "${NUEVA_RES}!" "$DIR_DESTINO/$nombre_archivo"
+        
+        elif [ "$TIPO_TRANSFORMACION" = "b" ]; then
+            echo "[RECORTANDO RATIO] '$nombre_archivo' -> $NUEVO_RATIO"
+            # Recorte inteligente desde el centro para cambiar el ratio sin deformar la imagen
+            convert "$imagen" -gravity center -crop "$NUEVO_RATIO" +repage "$DIR_DESTINO/$nombre_archivo"
+        fi
+
+    # --- MODO 2: Resolución Exacta ---
+    elif [ "$MODO" = "2" ]; then
+        if [ "$ancho" -eq "$TARGET_ANCHO" ] && [ "$alto" -eq "$TARGET_ALTO" ]; then
+            echo "[COINCIDENCIA] Moviendo '$nombre_archivo' ($ancho x $alto) -> /${RES_BUSCADA}/"
+            mv "$imagen" "$DIR_DESTINO/"
+        fi
+
+    # --- MODO 3: Aspect Ratio Personalizado ---
+    elif [ "$MODO" = "3" ]; then
+        img_ratio=$(echo "scale=4; $ancho / $alto" | bc)
+        diff=$(echo "scale=4; if ($img_ratio > $TARGET_RATIO) $img_ratio - $TARGET_RATIO else $TARGET_RATIO - $img_ratio" | bc)
+        match=$(echo "$diff <= 0.02" | bc)
+
+        if [ "$match" -eq 1 ]; then
+            echo "[RATIO MATCH] Moviendo '$nombre_archivo' -> /Aspecto_${DIR_RATIO_NAME}/"
+            mv "$imagen" "$DIR_DESTINO/"
+        fi
+
+    # --- MODO 1: Filtros fijos (Original) ---
+    else
+        ratio=$(echo "scale=3; $ancho / $alto" | bc)
+        es_21_9=$(echo "$ratio >= 2.33 && $ratio <= 2.40" | bc)
+
+        if [ "$ancho" -ge 1440 ]; then
+            echo "[ALTA RES] $nombre_archivo ($ancho x $alto)"
+            mv "$imagen" "$DIR_ALTA_RES/"
+        elif [ "$es_21_9" -eq 1 ]; then
+            echo "[21:9 RATIO] $nombre_archivo (Ratio: $ratio)"
+            mv "$imagen" "$DIR_ULTRAWIDE/"
+        fi
+    fi
+done
+
+echo "------------------------------------------------"
+echo "¡Proceso finalizado!"
+echo "Resultados en: $DIR_DESTINO"
+echo "------------------------------------------------"
