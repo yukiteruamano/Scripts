@@ -12,14 +12,16 @@
 # Códigos de salida: 0 bajo el límite (u otra instancia en curso),
 #                    1 error, 2 sigue sobre el límite tras todos los niveles.
 #
-# Ejecutar como root (o con acceso al socket Docker y lectura de DockerRootDir).
-# Con el containerd image store (Docker 29+), las imágenes viven en
-# /var/lib/containerd y se mide también esa ruta.
+# Pensado para Slackware (Docker de SlackBuilds.org, rc.docker, dcron, syslogd).
+# Ejecutar como root. Con el containerd image store (Docker 29+), las imágenes
+# viven en /var/lib/containerd y se mide también esa ruta.
 #
-# cron (cada 30 min):
-#   */30 * * * * /usr/local/bin/docker-space-guard.sh
-# systemd: un docker-space-guard.service (Type=oneshot, ExecStart=este script)
-#   y un .timer con OnCalendar=*:0/30 y Persistent=true.
+# Instalación con dcron, cada hora vía run-parts (sin extensión .sh):
+#   install -m 0755 docker-space-guard.sh /etc/cron.hourly/docker-space-guard
+# o cada 30 min en el crontab de root (crontab -e):
+#   */30 * * * * /usr/local/sbin/docker-space-guard.sh --truncate-logs
+# Los mensajes van a syslogd: info/notice en /var/log/messages y
+# warning/err en /var/log/syslog.
 
 set -euo pipefail
 
@@ -109,7 +111,12 @@ require_commands() {
 # acquire_lock: evita ejecuciones solapadas (p. ej. un du lento con cron frecuente)
 acquire_lock() {
     command -v flock >/dev/null 2>&1 || return 0
-    local lock_file="${XDG_RUNTIME_DIR:-/run/lock}/${LOG_TAG}.lock"
+    local lock_dir
+    # dcron no define XDG_RUNTIME_DIR y Slackware no siempre tiene /run/lock.
+    for lock_dir in "${XDG_RUNTIME_DIR:-}" /run/lock /var/lock /tmp; do
+        [[ -n $lock_dir && -d $lock_dir && -w $lock_dir ]] && break
+    done
+    local lock_file="${lock_dir}/${LOG_TAG}.lock"
     exec 9>"$lock_file" || die "No se puede crear el lock $lock_file"
     if ! flock -n 9; then
         log notice "Otra instancia está en ejecución; se omite esta pasada."
